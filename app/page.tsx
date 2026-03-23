@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/authContext'
 import { Header } from '@/components/header'
@@ -10,6 +9,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Flame, Target, Zap, TrendingUp, Plus, Loader2 } from 'lucide-react'
 import type { Habit } from '@/lib/dateUtils'
+import { FreezePopup } from '@/components/freeze-popup'
+import { requestNotificationPermission, startReminderScheduler } from '@/lib/notificationService'
+import { shouldShowFreezePopup, applyFreeze } from '@/lib/streakUtils'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   today,
   newHabit,
@@ -29,6 +32,43 @@ export default function Dashboard() {
   const [habitsLoading, setHabitsLoading] = useState(false)
   const [newName, setNewName] = useState('')
   const [newCategory, setNewCategory] = useState('') 
+  const [freezeQueue, setFreezeQueue] = useState<Habit[]>([])
+const [dismissedFreezeToday] = useState<Set<string>>(() => {
+  try {
+    return new Set(JSON.parse(sessionStorage.getItem('freezeDismissed') || '[]'))
+  } catch { return new Set() }
+})
+const habitsRef = useRef<Habit[]>([])
+const dismissFreezePopup = (habitId: string) => {
+  dismissedFreezeToday.add(habitId)
+  try {
+    sessionStorage.setItem('freezeDismissed', JSON.stringify([...dismissedFreezeToday]))
+  } catch (e) { /* ignore */ }
+  setFreezeQueue((prev) => prev.slice(1))
+}
+
+const handleUseFreeze = async () => {
+  if (!freezeQueue.length || !user) return
+  const habit = freezeQueue[0]
+  const updatedFreezeDates = applyFreeze(habit.freezeDates || [])
+  await updateHabitInFirestore(user.uid, habit.id, { freezeDates: updatedFreezeDates })
+  setHabits((prev) =>
+    prev.map((h) => h.id === habit.id ? { ...h, freezeDates: updatedFreezeDates } : h)
+  )
+  dismissFreezePopup(habit.id)
+}
+
+const handleSkipFreeze = () => {
+  if (freezeQueue.length) dismissFreezePopup(freezeQueue[0].id)
+}
+
+// Group habits by category
+const groupedHabits = habits.reduce<Record<string, Habit[]>>((acc, habit) => {
+  const key = habit.category || 'Uncategorized'
+  if (!acc[key]) acc[key] = []
+  acc[key].push(habit)
+  return acc
+}, {})
   
 
   // Redirect to login if not authenticated
@@ -49,6 +89,31 @@ export default function Dashboard() {
     })
     return () => { cancelled = true }
   }, [user])
+  // Keep habitsRef in sync
+useEffect(() => {
+  habitsRef.current = habits
+}, [habits])
+
+// Check freeze popup after habits load
+useEffect(() => {
+  if (!habits.length) return
+  const needFreeze = habits.filter((h) =>
+    shouldShowFreezePopup(h, dismissedFreezeToday.has(h.id))
+  )
+  setFreezeQueue(needFreeze)
+}, [habits, dismissedFreezeToday])
+
+// Request notification permission
+useEffect(() => {
+  if (user) requestNotificationPermission()
+}, [user])
+
+// Start reminder scheduler
+useEffect(() => {
+  if (!user) return
+  const stop = startReminderScheduler(() => habitsRef.current)
+  return () => stop()
+}, [user])
 
   // Add habit
 const addHabit = async () => {
@@ -112,7 +177,8 @@ const addHabit = async () => {
   )
 
   return (
-    <div className="min-h-screen bg-background">
+  <>
+  <div className="min-h-screen bg-background">
       <Header title="HabitFire" />
 
       <main className="mx-auto max-w-7xl px-4 py-8 md:px-6">
@@ -187,21 +253,38 @@ const addHabit = async () => {
               <p className="text-muted-foreground text-sm">No habits yet. Add your first one above!</p>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {habits.map((habit) => (
-                <HabitCard
-                  key={habit.id}
-                  name={habit.name}
-                  streak={calcStreak(habit.log, habit.freezeDates)}
-                  completed={habit.log.includes(today())}
-                  onLog={() => logHabit(habit.id)}
-                  category={habit.category}
-            
-                  onDelete={() => deleteHabit(habit.id)}
-                  onRename={(name) => renameHabit(habit.id, name)}
-                />
-              ))}
-            </div>
+            <div className="space-y-8">
+  {Object.entries(groupedHabits).map(([category, categoryHabits]) => (
+    <div key={category}>
+      {/* Category header */}
+      <div className="mb-3 flex items-center gap-3">
+        <h4 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+          {category}
+        </h4>
+        <div className="flex-1 h-px bg-border" />
+        <span className="text-xs text-muted-foreground">
+          {categoryHabits.filter(h => h.log.includes(today())).length}/{categoryHabits.length} done
+        </span>
+      </div>
+
+      {/* Habits grid */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {categoryHabits.map((habit) => (
+          <HabitCard
+            key={habit.id}
+            name={habit.name}
+            streak={calcStreak(habit.log, habit.freezeDates)}
+            completed={habit.log.includes(today())}
+            category={habit.category}
+            onLog={() => logHabit(habit.id)}
+            onDelete={() => deleteHabit(habit.id)}
+            onRename={(name: string) => renameHabit(habit.id, name)}
+          />
+        ))}
+      </div>
+    </div>
+  ))}
+</div>
           )}
         </div>
 
@@ -251,5 +334,14 @@ const addHabit = async () => {
         </div>
       </main>
     </div>
+    {/* Freeze popup */}
+    {freezeQueue.length > 0 && (
+      <FreezePopup
+        habitName={freezeQueue[0].name}
+        onFreeze={handleUseFreeze}
+        onSkip={handleSkipFreeze}
+      />
+    )}
+  </>
   )
 }

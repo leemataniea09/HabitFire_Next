@@ -64,7 +64,7 @@ export interface Habit {
   color?: 'pink' | 'peach' | 'lavender' | 'purple' | 'gold';
 }
 
-export function newHabit(name: string): Habit {
+export function newHabit(name: string, category?: string): Habit {
   return {
     id: Date.now().toString(),
     name,
