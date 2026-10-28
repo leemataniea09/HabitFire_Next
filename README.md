@@ -68,4 +68,92 @@ Install the following before running the project:
 
 ### Installation
 
-**1. Clone
+**1. Clone the repository**
+
+```bash
+git clone https://github.com/leemataniea09/HabitFire_Next.git
+```
+
+**2. Open the project directory**
+
+```bash
+cd HabitFire_Next
+```
+
+**3. Install dependencies**
+
+```bash
+npm install
+```
+
+**4. Configure environment variables**
+
+Use the provided `.env.example` file to identify the environment variables required by the application. Create your local `.env.local` file and configure the necessary values.
+
+Never commit real credentials or private keys.
+
+**5. Start the development server**
+
+```bash
+npm run dev
+```
+
+**6. Open the application**
+
+Visit [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Available Routes
+
+The project contains the following application pages:
+
+| Route | Purpose |
+|---|---|
+| `/` | Main dashboard |
+| `/habits` | Habit management |
+| `/daily-log` | Daily activity logging |
+| `/weekly` | Weekly progress |
+| `/monthly` | Monthly history |
+| `/stats` | Habit statistics |
+| `/login` | Authentication interface |
+
+## Environment Configuration
+
+The application may require Firebase configuration and authentication-related environment variables.
+
+Check `.env.example` for the exact variable names and configure them locally before running the application.
+
+Do not upload populated environment files containing private credentials.
+
+## Future Improvements
+
+Potential improvements include:
+
+- Habit reminders and notifications.
+- Customisable habit goals and schedules.
+- Advanced progress charts and analytics.
+- Data export and backup.
+- Improved accessibility and keyboard navigation.
+- Additional personalisation options.
+
+## Contributing
+
+Contributions and suggestions are welcome.
+
+1. Fork the repository.
+2. Create a branch for your changes.
+3. Implement and test your changes.
+4. Submit a pull request describing your improvements.
+
+## License
+
+No license has been specified for this project yet.
+
+## Author
+
+**Taniea**
+
+GitHub: [@leemataniea09](https://github.com/leemataniea09)
+
+---
+
+*HabitFire helps you keep track of the small, consistent actions that support your goals.*
